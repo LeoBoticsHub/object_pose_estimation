@@ -125,7 +125,43 @@ class PoseEstimator:
                     o3d.visualization.draw_geometries([filt_pcd], window_name = 'Filtered PCD')
                 else:
                     filt_pcd = copy.deepcopy(detected_pcd)
-                    raise Warning('Filtering method (filt_type) not valid')
+                    print('Filtering method (filt_type) not valid -> No filter applied')
+
+            return filt_pcd
+
+
+    def global_registration(self, obs_pcd):
+        source = self.model_pcd
+        target = obs_pcd
+
+        radius_normal = self.voxel_size * 2
+        print(":: Estimate normal with search radius %.3f." % radius_normal)
+        self.model_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
+        obs_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
+
+        radius_feature = self.voxel_size * 5
+        print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
+        model_fpfh = o3d.pipelines.registration.compute_fpfh_feature(self.model_pcd, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+        obs_fpfh = o3d.pipelines.registration.compute_fpfh_feature(obs_pcd, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+
+        distance_threshold = self.voxel_size * 1.5
+        print(":: RANSAC registration with liberal distance threshold %.3f." % distance_threshold)
+        result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+            self.model_pcd, obs_pcd, model_fpfh, obs_fpfh, True,
+            distance_threshold,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+            3, [
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
+                    0.9),
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
+                    distance_threshold)
+            ], o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
+
+        return result
+
+
+
+
 
                 
 
