@@ -17,15 +17,19 @@ filt_params_dict = {'nb_neighbors': 100, 'std_ratio': 0.1}
 # filt_params_dict = {'nb_points': 16, 'radius': 0.0025*2.5}
 
 obs_pcd = estimator.get_yolact_pcd(filt_type, filt_params_dict)
-obs_pcd.paint_uniform_color([0, 0, 1]) 
-gl_reg = estimator.global_registration(obs_pcd)
+obs_pcd.paint_uniform_color([0, 0.651, 0.929])
+T_gl = estimator.global_registration(obs_pcd)
 
-model_glob = copy.deepcopy(estimator.model_pcd).transform(gl_reg.transformation)
-model_glob.paint_uniform_color([1, 0, 0])
+model_glob = copy.deepcopy(estimator.model_pcd).transform(T_gl)
+model_glob.paint_uniform_color([1, 0.706, 0])
 o3d.visualization.draw_geometries([model_glob, obs_pcd], window_name = 'Global registration')
 
+T_icp = estimator.local_registration(obs_pcd, T_gl)
 
 
+model_icp = copy.deepcopy(estimator.model_pcd).transform(T_icp)
+model_icp.paint_uniform_color([1, 0.706, 0])
+o3d.visualization.draw_geometries([model_icp, obs_pcd], window_name = 'Point-to-point ICP')
 
 
 

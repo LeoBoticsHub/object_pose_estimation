@@ -146,7 +146,7 @@ class PoseEstimator:
 
         distance_threshold = self.voxel_size * 1.5
         print(":: RANSAC registration with liberal distance threshold %.3f." % distance_threshold)
-        result = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+        glob_rec = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
             self.model_pcd, obs_pcd, model_fpfh, obs_fpfh, True,
             distance_threshold,
             o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
@@ -157,7 +157,20 @@ class PoseEstimator:
                     distance_threshold)
             ], o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
 
-        return result
+        return glob_rec.transformation
+
+    def local_registration(self, obs_pcd, trans_init, max_iteration = 50000, threshold = 0.01):
+        print("Apply local registration via ICP")
+
+        source = self.model_pcd
+        target = obs_pcd
+        print("Point-to-point ICP")
+        reg_p2p = o3d.pipelines.registration.registration_icp(
+            source, target, threshold, trans_init,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration = max_iteration))
+
+        return reg_p2p.transformation
 
 
 
