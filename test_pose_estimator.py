@@ -4,6 +4,7 @@ import open3d as o3d
 import copy
 
 yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_resnet50_54_800000.pth"
+
 estimator = PoseEstimator(camera_type = 'REALSENSE',
                             obj_label = 'cup', 
                             obj_model_file = 'cup.ply', 
@@ -22,14 +23,20 @@ T_gl = estimator.global_registration(obs_pcd)
 
 model_glob = copy.deepcopy(estimator.model_pcd).transform(T_gl)
 model_glob.paint_uniform_color([1, 0.706, 0])
-o3d.visualization.draw_geometries([model_glob, obs_pcd], window_name = 'Global registration')
+
+world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
+model_glob_frame = copy.deepcopy(world_frame).transform(T_gl)
+
+o3d.visualization.draw_geometries([model_glob, obs_pcd, world_frame, model_glob_frame], window_name = 'Global registration')
 
 T_icp = estimator.local_registration(obs_pcd, T_gl)
 
-
 model_icp = copy.deepcopy(estimator.model_pcd).transform(T_icp)
 model_icp.paint_uniform_color([1, 0.706, 0])
-o3d.visualization.draw_geometries([model_icp, obs_pcd], window_name = 'Point-to-point ICP')
+
+model_icp_frame = copy.deepcopy(world_frame).transform(T_icp)
+o3d.visualization.draw_geometries([model_icp, obs_pcd, world_frame, model_icp_frame], window_name = 'Point-to-point ICP')
+
 
 
 

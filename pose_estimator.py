@@ -29,7 +29,7 @@ def display_inlier_outlier(cloud, ind):
     o3d.visualization.draw_geometries([inlier_cloud, outlier_cloud], window_name = 'Filtering')
 
 class PoseEstimator:
-    def __init__(self, camera_type, obj_label, obj_model_file, yolact_weights, voxel_size):
+    def __init__(self, camera_type, obj_label, obj_model_file, yolact_weights, voxel_size, flg_plot = False):
         try:
             self.yolact = YolactInference(model_weights=yolact_weights, display_img = False)
         except:
@@ -57,7 +57,13 @@ class PoseEstimator:
         
         self.model_pcd = self.model_pcd.voxel_down_sample(self.voxel_size) # 1. Points are bucketed into voxels.
                                                                            # 2. Each occupied voxel generates exact one point by averaging all points inside.
-    
+
+        self.flg_plot = flg_plot
+
+        if self.flg_plot:
+            world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
+            o3d.visualization.draw_geometries([self.model_pcd, world_frame], window_name = 'Model PCD')
+   
 
 
     def get_yolact_pcd(self, filt_type, filt_params_dict):
@@ -90,42 +96,51 @@ class PoseEstimator:
                 color_crop = o3d.geometry.Image(rgb_frame_new)
                 depth_crop = o3d.geometry.Image(depth_frame_new.astype(np.uint16))
                 rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop)
-
-                plt.figure()
-                plt.subplot(2, 2, 1)
-                plt.title('Grayscale scene')
-                plt.imshow(rgbd_frame.color)
-                plt.subplot(2, 2, 2)
-                plt.title('Depth scene')
-                plt.imshow(rgbd_frame.depth)
-                plt.subplot(2, 2, 3)
-                plt.title('Grayscale crop')
-                plt.imshow(rgbd_crop.color)
-                plt.subplot(2, 2, 4)
-                plt.title('Depth crop')
-                plt.imshow(rgbd_crop.depth)
-                plt.show()
+                
+                if self.flg_plot:
+                    plt.figure()
+                    plt.subplot(2, 2, 1)
+                    plt.title('Grayscale scene')
+                    plt.imshow(rgbd_frame.color)
+                    plt.subplot(2, 2, 2)
+                    plt.title('Depth scene')
+                    plt.imshow(rgbd_frame.depth)
+                    plt.subplot(2, 2, 3)
+                    plt.title('Grayscale crop')
+                    plt.imshow(rgbd_crop.color)
+                    plt.subplot(2, 2, 4)
+                    plt.title('Depth crop')
+                    plt.imshow(rgbd_crop.depth)
+                    plt.show()
 
                 print("Use Yolact mask to crop point cloud")
                 detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsic)
-                # Flip it, otherwise the pointcloud will be upside down
-                detected_pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+                # # Flip it, otherwise the pointcloud will be upside down
+                # detected_pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
                 detected_pcd = detected_pcd.voxel_down_sample(self.voxel_size)
-                o3d.visualization.draw_geometries([detected_pcd], window_name = 'Yolact PCD')
+
+                if self.flg_plot:
+                    world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
+                    o3d.visualization.draw_geometries([detected_pcd, world_frame], window_name = 'Yolact PCD')
+
+                
 
                 if filt_type == 'STATISTICAL':
                     print("Statistical oulier removal")
                     filt_pcd, ind = detected_pcd.remove_statistical_outlier(**filt_params_dict)
-                    display_inlier_outlier(detected_pcd, ind)
-                    o3d.visualization.draw_geometries([filt_pcd], window_name = 'Filtered PCD')
+                    if self.flg_plot:
+                        display_inlier_outlier(detected_pcd, ind)
                 elif filt_type == 'RADIUS':
                     print("Radius oulier removal")
                     filt_pcd, ind = detected_pcd.remove_radius_outlier(**filt_params_dict)
-                    display_inlier_outlier(detected_pcd, ind)
-                    o3d.visualization.draw_geometries([filt_pcd], window_name = 'Filtered PCD')
+                    if self.flg_plot:
+                        display_inlier_outlier(detected_pcd, ind)
                 else:
                     filt_pcd = copy.deepcopy(detected_pcd)
                     print('Filtering method (filt_type) not valid -> No filter applied')
+
+                if self.flg_plot:
+                    o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Filtered PCD')
 
             return filt_pcd
 
@@ -136,30 +151,28 @@ class PoseEstimator:
 
         radius_normal = self.voxel_size * 2
         print(":: Estimate normal with search radius %.3f." % radius_normal)
-        self.model_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
-        obs_pcd.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
+        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
+        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
 
         radius_feature = self.voxel_size * 5
         print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
-        model_fpfh = o3d.pipelines.registration.compute_fpfh_feature(self.model_pcd, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
-        obs_fpfh = o3d.pipelines.registration.compute_fpfh_feature(obs_pcd, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+        model_fpfh = o3d.pipelines.registration.compute_fpfh_feature(source, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+        obs_fpfh = o3d.pipelines.registration.compute_fpfh_feature(target, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
 
         distance_threshold = self.voxel_size * 1.5
         print(":: RANSAC registration with liberal distance threshold %.3f." % distance_threshold)
         glob_rec = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
-            self.model_pcd, obs_pcd, model_fpfh, obs_fpfh, True,
-            distance_threshold,
-            o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
-            3, [
-                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(
-                    0.9),
-                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(
-                    distance_threshold)
-            ], o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
+            source, target, model_fpfh, obs_fpfh, True, distance_threshold,
+            o3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3, 
+            [
+            o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+            o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)
+            ], 
+            o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
 
         return glob_rec.transformation
 
-    def local_registration(self, obs_pcd, trans_init, max_iteration = 50000, threshold = 0.01):
+    def local_registration(self, obs_pcd, trans_init, max_iteration = 10000, threshold = 0.01):
         print("Apply local registration via ICP")
 
         source = self.model_pcd
