@@ -29,7 +29,8 @@ def display_inlier_outlier(cloud, ind):
     o3d.visualization.draw_geometries([inlier_cloud, outlier_cloud], window_name = 'Filtering')
 
 class PoseEstimator:
-    def __init__(self, camera_type, obj_label, obj_model_file, yolact_weights, voxel_size, flg_plot = False):
+    """ Object Pose Estimator based on Yolact segmentation and ICP point-cloud registration """
+    def __init__(self, camera_type, obj_label, obj_model_path, yolact_weights, voxel_size, flg_plot = False):
         try:
             self.yolact = YolactInference(model_weights=yolact_weights, display_img = flg_plot)
         except:
@@ -51,7 +52,7 @@ class PoseEstimator:
 
         print("Load object model")
         try:
-            self.model_pcd = o3d.io.read_point_cloud('model/'+obj_model_file)
+            self.model_pcd = o3d.io.read_point_cloud(obj_model_path)
             self.model_pcd = self.model_pcd.translate(-self.model_pcd.get_center())
         except:
             raise ValueError('Error loading object model')
@@ -68,6 +69,7 @@ class PoseEstimator:
 
 
     def get_yolact_pcd(self, filt_type, filt_params_dict):
+        """ Get object PCD from camera RGBD frames masked by Yolact inference """
         print("Get camera frames")
         rgb_frame, depth_frame = self.camera.get_aligned_frames()
         rgb_frame = np.array(rgb_frame)
@@ -142,11 +144,16 @@ class PoseEstimator:
 
                 if self.flg_plot:
                     o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Filtered PCD')
-
-            return filt_pcd
+                
+                return filt_pcd
+            else:
+                raise Exception("Yolact: Detected more than one object instance.")
+        else:
+            raise Exception("Yolact: no object detected.")
 
 
     def global_registration(self, obs_pcd):
+        """ Get a rough alignment between the observed PCD and the model """
         source = self.model_pcd
         target = obs_pcd
 
@@ -174,6 +181,7 @@ class PoseEstimator:
         return glob_rec.transformation
 
     def local_registration(self, obs_pcd, trans_init, max_iteration = 10000, threshold = 0.01):
+        """ Refine the alignment between the observed PCD and the model via Point-to-Point ICP """
         print("Apply local registration via ICP")
 
         source = self.model_pcd
@@ -185,6 +193,14 @@ class PoseEstimator:
             o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration = max_iteration))
 
         return reg_p2p.transformation
+
+
+    def locate_object(self, filt_type, filt_params_dict, icp_max_iteration = 10000, icp_threshold = 0.01):
+        """ Apply the whole pipeline for object pose estimation """
+        filt_pcd = self.get_yolact_pcd(filt_type, filt_params_dict)
+        T_gl = self.global_registration(filt_pcd)
+        T_icp = self.local_registration(filt_pcd, T_gl, icp_max_iteration, icp_threshold)
+        return T_icp, filt_pcd
 
 
 
