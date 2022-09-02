@@ -82,6 +82,7 @@ Alternatively, you can try skipping all manual efforts by trying register_segmen
 ```python
 python register_segmented.py LINEMOD/sugar
 ```
+By default, register_segmented attempts to removes all unwanted backgrounds and performs surface reconstruction that converts the registered pointcloud into a triangular mesh. If MESHING is set to false, the script will only attempt to remove background and auto-complete the unseen bottom with a flat surface (If FILLBOTTOM is set to true), and you will need to do step 5.
 
 register_segmented attempts to remove all unwanted backgrounds and auto-complete the unseen bottom with a flat surface (If FILLBOTTOM is set to True). The most important knob to tune is "MAX_RADIUS", which cuts off any depth reading whose Euclidean distance to the center of the aruco markers observed is longer than the value specified. This value is currently set at 0.2 m, if you have a larger object, you may need to increase this value to not cut off parts of your object.
 It is possible that manual processing may still be required to refine the pointcloud.
@@ -89,7 +90,7 @@ It is possible that manual processing may still be required to refine the pointc
 
 ### 5. Process the registered pointcloud manually (Optional)
 
-**You can skip step 5 if you are satisfied with the result from running register_segmented.**
+**(03/03/2019) You can skip step 5 if you are satisfied with the result from running register_segmented.**
 
 The registered pointcloud needs to be processed in MeshLab to
 - Remove background that is not of interest,
