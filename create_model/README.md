@@ -76,8 +76,7 @@ python register_scene.py LINEMOD/sugar
 ```
 A raw registeredScene.ply will be saved under the specified directory (e.g., LINEMOD/sugar). The registeredScene.ply is a registered pointcloud of the scene that includes the table top, markers, and any other objects exposed during the scanning, with some level of noise removal. The generated pointcloud requires manual processing, as described in step 5.
 
-
-Alternatively, you can try skipping all manual efforts by trying register_segmented instead of register_scene.
+Alternatively, you can try skipping some manual efforts by trying register_segmented instead of register_scene.
 
 ```python
 python register_segmented.py LINEMOD/sugar
