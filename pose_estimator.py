@@ -31,7 +31,7 @@ def display_inlier_outlier(cloud, ind):
 class PoseEstimator:
     def __init__(self, camera_type, obj_label, obj_model_file, yolact_weights, voxel_size, flg_plot = False):
         try:
-            self.yolact = YolactInference(model_weights=yolact_weights, display_img = False)
+            self.yolact = YolactInference(model_weights=yolact_weights, display_img = flg_plot)
         except:
             raise ValueError('Yolact inizialization error')
 
@@ -52,6 +52,7 @@ class PoseEstimator:
         print("Load object model")
         try:
             self.model_pcd = o3d.io.read_point_cloud('model/'+obj_model_file)
+            self.model_pcd = self.model_pcd.translate(-self.model_pcd.get_center())
         except:
             raise ValueError('Error loading object model')
         

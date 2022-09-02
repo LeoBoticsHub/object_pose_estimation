@@ -1,18 +1,20 @@
 from pathlib import Path
 from pose_estimator import PoseEstimator
 import open3d as o3d
+import numpy as np
 import copy
 
 yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_resnet50_54_800000.pth"
 
 estimator = PoseEstimator(camera_type = 'REALSENSE',
-                            obj_label = 'cup', 
-                            obj_model_file = 'cup.ply', 
+                            obj_label = 'mouse', 
+                            obj_model_file = 'mouse2.ply', 
                             yolact_weights = yolact_weights, 
-                            voxel_size = 0.0025)
+                            voxel_size = 0.0025,
+                            flg_plot = False)
 
 filt_type = 'STATISTICAL'
-filt_params_dict = {'nb_neighbors': 100, 'std_ratio': 0.1}
+filt_params_dict = {'nb_neighbors': 50, 'std_ratio': 0.2}
 
 # filt_type = 'RADIUS'
 # filt_params_dict = {'nb_points': 16, 'radius': 0.0025*2.5}
