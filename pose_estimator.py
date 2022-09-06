@@ -4,17 +4,6 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import copy
-
-from pathlib import Path
-yolact_path = str(Path.home()) + '/Code/Vision/yolact'
-sys.path.append(yolact_path)
-
-camera_path = str(Path.home()) + '/Code/Vision/camera_utils/src'
-sys.path.append(camera_path)
-
-ai_path = str(Path.home()) + '/Code/Vision/ai_utils/src'
-sys.path.append(ai_path)
-
 from camera_utils.camera_init import IntelRealsense
 from camera_utils.camera_init import Zed
 from ai_utils.YolactInference import YolactInference
