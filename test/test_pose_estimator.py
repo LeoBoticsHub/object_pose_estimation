@@ -12,7 +12,7 @@ estimator = PoseEstimator(camera_type = 'REALSENSE',            # Camera employe
                           obj_model_path = model_path,          # Path to the PCD model
                           yolact_weights = yolact_weights,      # Path to Yolact weights
                           voxel_size = 0.0025,                  # Voxel size for downsamping
-                          flg_plot = False)                     # Set to True to show intermidiate results
+                          flg_plot = False)                      # Set to True to show intermidiate results
 
 # Select PCD filtering method
 filt_type = 'STATISTICAL'
@@ -21,7 +21,7 @@ filt_params_dict = {'nb_neighbors': 50, 'std_ratio': 0.2}
 # filt_params_dict = {'nb_points': 16, 'radius': 0.0025*2.5}
 
 # Get PCD from Yolact-masked RGBD
-obs_pcd = estimator.get_yolact_pcd(filt_type, filt_params_dict)
+obs_pcd, scene_pcd = estimator.get_yolact_pcd(filt_type, filt_params_dict)
 obs_pcd.paint_uniform_color([0, 0.651, 0.929])
 T_gl = estimator.global_registration(obs_pcd)
 
@@ -31,7 +31,7 @@ model_glob.paint_uniform_color([1, 0.706, 0])
 
 world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
 model_glob_frame = copy.deepcopy(world_frame).transform(T_gl)
-o3d.visualization.draw_geometries([model_glob, obs_pcd, world_frame, model_glob_frame], window_name = 'Global registration')
+o3d.visualization.draw_geometries([model_glob, obs_pcd, world_frame, model_glob_frame, scene_pcd], window_name = 'Global registration')
 
 # Apply Local Registration via ICP
 T_icp = estimator.local_registration(obs_pcd, T_gl)
@@ -39,5 +39,5 @@ T_icp = estimator.local_registration(obs_pcd, T_gl)
 model_icp = copy.deepcopy(estimator.model_pcd).transform(T_icp)
 model_icp.paint_uniform_color([1, 0.706, 0])
 model_icp_frame = copy.deepcopy(world_frame).transform(T_icp)
-o3d.visualization.draw_geometries([model_icp, obs_pcd, world_frame, model_icp_frame], window_name = 'Point-to-point ICP')
+o3d.visualization.draw_geometries([model_icp, obs_pcd, world_frame, model_icp_frame, scene_pcd], window_name = 'Point-to-point ICP')
 

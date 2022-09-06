@@ -7,7 +7,7 @@ setup(
     version='1.0.0',
     packages=[package_name],
     data_files=[],
-    install_requires=['setuptools', 'numpy', 'open3d', 'matplotlib'],
+    install_requires=['setuptools', 'numpy', 'open3d', 'opencv-python', 'matplotlib'],
     zip_safe=True,
     maintainer='fabio-amadio',
     maintainer_email='fabioamadio93@gmail.com',

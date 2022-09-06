@@ -32,10 +32,6 @@ class PoseEstimator:
         else:
             sys.exit("Wrong camera type!")
 
-        print("Camera initialization")
-        for i in range(30):
-            _, _ = self.camera.get_aligned_frames()
-
         self.obj_label = obj_label      # object yolact label
         self.voxel_size = voxel_size    # downsampling voxel size
 
@@ -48,6 +44,11 @@ class PoseEstimator:
         
         self.model_pcd = self.model_pcd.voxel_down_sample(self.voxel_size) # 1. Points are bucketed into voxels.
                                                                            # 2. Each occupied voxel generates exact one point by averaging all points inside.
+        
+        print("Camera initialization")
+        for i in range(30):
+            _, _ = self.camera.get_aligned_frames()
+
 
         self.flg_plot = flg_plot
 
@@ -63,12 +64,16 @@ class PoseEstimator:
         rgb_frame, depth_frame = self.camera.get_aligned_frames()
         rgb_frame = np.array(rgb_frame)
         rgbd_frame = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(rgb_frame), o3d.geometry.Image(depth_frame.astype(np.uint16)))
+        
 
         # set intrinsics for open3d
         width = max(depth_frame.shape[0], depth_frame.shape[1])
         height = min(depth_frame.shape[0], depth_frame.shape[1])
         intrinsic = o3d.camera.PinholeCameraIntrinsic()
         intrinsic.set_intrinsics(width, height, self.camera.intr['fx'], self.camera.intr['fy'], self.camera.intr['px'], self.camera.intr['py'])
+
+        # save scene pcd
+        scene_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, intrinsic)
             
         print("Yolact inference")
         infer = self.yolact.img_inference(rgb_frame, classes=[self.obj_label])
@@ -89,21 +94,21 @@ class PoseEstimator:
                 depth_crop = o3d.geometry.Image(depth_frame_new.astype(np.uint16))
                 rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop)
                 
-                if self.flg_plot:
-                    plt.figure()
-                    plt.subplot(2, 2, 1)
-                    plt.title('Grayscale scene')
-                    plt.imshow(rgbd_frame.color)
-                    plt.subplot(2, 2, 2)
-                    plt.title('Depth scene')
-                    plt.imshow(rgbd_frame.depth)
-                    plt.subplot(2, 2, 3)
-                    plt.title('Grayscale crop')
-                    plt.imshow(rgbd_crop.color)
-                    plt.subplot(2, 2, 4)
-                    plt.title('Depth crop')
-                    plt.imshow(rgbd_crop.depth)
-                    plt.show()
+                # if self.flg_plot:
+                #     plt.figure()
+                #     plt.subplot(2, 2, 1)
+                #     plt.title('Grayscale scene')
+                #     plt.imshow(rgbd_frame.color)
+                #     plt.subplot(2, 2, 2)
+                #     plt.title('Depth scene')
+                #     plt.imshow(rgbd_frame.depth)
+                #     plt.subplot(2, 2, 3)
+                #     plt.title('Grayscale crop')
+                #     plt.imshow(rgbd_crop.color)
+                #     plt.subplot(2, 2, 4)
+                #     plt.title('Depth crop')
+                #     plt.imshow(rgbd_crop.depth)
+                #     plt.show()
 
                 print("Use Yolact mask to crop point cloud")
                 detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsic)
@@ -134,7 +139,7 @@ class PoseEstimator:
                 if self.flg_plot:
                     o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Filtered PCD')
                 
-                return filt_pcd
+                return filt_pcd, scene_pcd
             else:
                 raise Exception("Yolact: Detected more than one object instance.")
         else:
@@ -186,10 +191,10 @@ class PoseEstimator:
 
     def locate_object(self, filt_type, filt_params_dict, icp_max_iteration = 10000, icp_threshold = 0.01):
         """ Apply the whole pipeline for object pose estimation """
-        filt_pcd = self.get_yolact_pcd(filt_type, filt_params_dict)
+        filt_pcd, scene_pcd = self.get_yolact_pcd(filt_type, filt_params_dict)
         T_gl = self.global_registration(filt_pcd)
         T_icp = self.local_registration(filt_pcd, T_gl, icp_max_iteration, icp_threshold)
-        return T_icp, filt_pcd
+        return T_icp, filt_pcd, scene_pcd
 
 
 
