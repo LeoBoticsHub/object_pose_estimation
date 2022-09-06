@@ -1,14 +1,15 @@
 from pathlib import Path
-from pose_estimator import PoseEstimator
+from object_pose_estimation.pose_estimator import PoseEstimator
 import open3d as o3d
 import numpy as np
 import copy
 
 yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_resnet50_54_800000.pth"
+model_path = str(Path.home()) + "/Code/Vision/object_pose_estimation/test/models/mouse.ply"
 
 estimator = PoseEstimator(camera_type = 'REALSENSE',            # Camera employed ('REALSENSE' or 'ZED')
                           obj_label = 'mouse',                  # Yolact label
-                          obj_model_path = 'model/mouse.ply',   # Path to the PCD model
+                          obj_model_path = model_path,          # Path to the PCD model
                           yolact_weights = yolact_weights,      # Path to Yolact weights
                           voxel_size = 0.0025,                  # Voxel size for downsamping
                           flg_plot = False)                     # Set to True to show intermidiate results
