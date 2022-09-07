@@ -44,7 +44,7 @@ class PoseEstimator:
         
         self.model_pcd = self.model_pcd.voxel_down_sample(self.voxel_size) # 1. Points are bucketed into voxels.
                                                                            # 2. Each occupied voxel generates exact one point by averaging all points inside.
-        
+       
         print("Camera initialization")
         for i in range(30):
             _, _ = self.camera.get_aligned_frames()
@@ -153,8 +153,8 @@ class PoseEstimator:
 
         radius_normal = self.voxel_size * 2
         print(":: Estimate normal with search radius %.3f." % radius_normal)
-        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
-        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=30))
+        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=10))
+        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=10))
 
         radius_feature = self.voxel_size * 5
         print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
@@ -170,30 +170,43 @@ class PoseEstimator:
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)
             ], 
-            o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 0.999))
-
+            o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 1.0))
+        print(glob_rec)
         return glob_rec.transformation
 
-    def local_registration(self, obs_pcd, trans_init, max_iteration = 10000, threshold = 0.01):
+    def local_registration(self, obs_pcd, trans_init, max_iteration = 100000, threshold = 0.01, method = 'p2p'):
         """ Refine the alignment between the observed PCD and the model via Point-to-Point ICP """
         print("Apply local registration via ICP")
 
         source = self.model_pcd
         target = obs_pcd
-        print("Point-to-point ICP")
-        reg_p2p = o3d.pipelines.registration.registration_icp(
+
+        if method == 'p2p':
+            print("Point-to-point ICP")
+            reg_p2p = o3d.pipelines.registration.registration_icp(
             source, target, threshold, trans_init,
             o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration = max_iteration))
+            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness = 10**-6, relative_rmse = 10**-6, max_iteration = max_iteration))
+            print(reg_p2p)
+            return reg_p2p.transformation
+            
+        elif method == 'p2pl':
+            print("Point-to-plane ICP")
+            reg_p2pl = o3d.pipelines.registration.registration_icp(
+            source, target, threshold, trans_init,
+            o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness = 10**-6, relative_rmse = 10**-6, max_iteration = max_iteration))
+            print(reg_p2pl)
+            return reg_p2pl.transformation
+        else:
+            raise ValueError("Unknown local registration method")
+       
 
-        return reg_p2p.transformation
-
-
-    def locate_object(self, filt_type, filt_params_dict, icp_max_iteration = 10000, icp_threshold = 0.01):
+    def locate_object(self, filt_type, filt_params_dict, icp_max_iteration = 100000, icp_threshold = 0.2, method = 'p2p'):
         """ Apply the whole pipeline for object pose estimation """
         filt_pcd, scene_pcd = self.get_yolact_pcd(filt_type, filt_params_dict)
         T_gl = self.global_registration(filt_pcd)
-        T_icp = self.local_registration(filt_pcd, T_gl, icp_max_iteration, icp_threshold)
+        T_icp = self.local_registration(filt_pcd, T_gl, icp_max_iteration, icp_threshold, method)
         return T_icp, filt_pcd, scene_pcd
 
 
