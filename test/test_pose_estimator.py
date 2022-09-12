@@ -18,7 +18,7 @@ estimator = PoseEstimator(camera_type = 'REALSENSE',            # Camera employe
                           flg_plot = False)                     # Set to True to show intermidiate results
 
 # Select PCD filtering method
-filt_type = 'None'
+filt_type = 'STATISTICAL'
 filt_params_dict = {'nb_neighbors': 50, 'std_ratio': 0.2}
 # filt_type = 'RADIUS'
 # filt_params_dict = {'nb_points': 16, 'radius': 0.0025*2.5}

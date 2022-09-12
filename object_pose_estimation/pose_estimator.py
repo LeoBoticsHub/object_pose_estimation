@@ -190,14 +190,25 @@ class PoseEstimator:
             print(reg_p2p)
             return reg_p2p.transformation
             
-        elif method == 'p2pl':
-            print("Point-to-plane ICP")
-            reg_p2pl = o3d.pipelines.registration.registration_icp(
-            source, target, threshold, trans_init,
-            o3d.pipelines.registration.TransformationEstimationPointToPlane(),
-            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness = 10**-6, relative_rmse = 10**-6, max_iteration = max_iteration))
-            print(reg_p2pl)
-            return reg_p2pl.transformation
+        elif method == 'p2l':
+            # print("Point-to-plane ICP")
+            # reg_p2l = o3d.pipelines.registration.registration_icp(
+            # source, target, threshold, trans_init,
+            # o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+            # o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness = 10**-6, relative_rmse = 10**-6, max_iteration = max_iteration))
+
+            print("Robust point-to-plane ICP")
+            sigma = 0.01
+            loss = o3d.pipelines.registration.TukeyLoss(k=sigma)
+            print("Using robust loss:", loss)
+            p2l = o3d.pipelines.registration.TransformationEstimationPointToPlane(loss)
+            conv = o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness = 10**-6, relative_rmse = 10**-6, max_iteration = max_iteration)
+            reg_p2l = o3d.pipelines.registration.registration_icp(source, target,
+                                                                  threshold, trans_init,
+                                                                  p2l, conv)
+
+            print(reg_p2l)
+            return reg_p2l.transformation
         else:
             raise ValueError("Unknown local registration method")
        
