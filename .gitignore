@@ -1,6 +1,7 @@
 # Custom ignore
 *.png
 *.jpg
+*.csv
 
 
 # Byte-compiled / optimized / DLL files
