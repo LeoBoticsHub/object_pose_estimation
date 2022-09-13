@@ -54,6 +54,9 @@ for camera in cameras:
     intrinsic = o3d.camera.PinholeCameraIntrinsic()
     intrinsic.set_intrinsics(width, height, camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
 
+    scene = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, intrinsic)
+    o3d.visualization.draw_geometries([scene])
+
     print("Yolact inference")
     infer = yolact.img_inference(rgb_frame, classes=[obj_label])
 
@@ -89,4 +92,9 @@ full_pcd = pcds[0] + pcds[1]
 voxel_size = 0.01
 full_pcd.voxel_down_sample(voxel_size)
 full_pcd, ind  = full_pcd.remove_statistical_outlier(nb_neighbors=50, std_ratio=0.2)
+
+
 o3d.visualization.draw_geometries([full_pcd, camera1_frame, camera2_frame])
+
+
+o3d.io.write_point_cloud('test/models/comb_drill.ply', full_pcd)
