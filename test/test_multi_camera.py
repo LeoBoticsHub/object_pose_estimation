@@ -17,8 +17,9 @@ except:
     raise ValueError('Yolact inizialization error')
 obj_label = 'drill'      # object yolact label
 
-camera1 = IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number='023322061667')
-camera2 = IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number='023322062736')
+camera1 = IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number='023322061667') # D415
+# camera2 = IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number='023322062736') # D415
+camera2 = IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number='049122251418') # D455
 print("Cameras initialization")
 for i in range(30):
     _, _ = camera1.get_aligned_frames()
@@ -43,7 +44,9 @@ camera2_frame = copy.deepcopy(camera1_frame).transform(cam1_H_cam2)
 
 print("Get camera frames")
 pcds = []
-camera_count = 1
+camera_count = 0
+
+intrinsics = []
 for camera in cameras:
     rgb_frame, depth_frame = camera.get_aligned_frames()
     rgb_frame = np.array(rgb_frame)
@@ -53,6 +56,7 @@ for camera in cameras:
     height = min(depth_frame.shape[0], depth_frame.shape[1])
     intrinsic = o3d.camera.PinholeCameraIntrinsic()
     intrinsic.set_intrinsics(width, height, camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
+    intrinsics.append(intrinsic)
 
     # scene = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, intrinsic)
     # o3d.visualization.draw_geometries([scene])
@@ -77,10 +81,10 @@ for camera in cameras:
             rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop, 1000.0, 5.0, False)
 
             # save scene pcd
-            if camera_count == 1:
-                pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsic))
+            if camera_count == 0:
+                pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsics[camera_count]))
             else:
-                pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsic, extrinsic = np.linalg.inv(cam1_H_cam2)))
+                pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsics[camera_count], extrinsic = np.linalg.inv(cam1_H_cam2)))
                 
                 # # Passing inv(cam1_H_cam2) as 'extrinsic' is equivalent to apply transform(cam1_H_cam2):
                 # pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsic)
