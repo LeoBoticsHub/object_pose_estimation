@@ -14,7 +14,7 @@ estimator = PoseEstimator(camera_type = 'REALSENSE',            # Camera employe
                           obj_label = 'drill',                  # Yolact label
                           obj_model_path = model_path,          # Path to the PCD model
                           yolact_weights = yolact_weights,      # Path to Yolact weights
-                          voxel_size = 0.0025,                  # Voxel size for downsamping
+                          voxel_size = 0.005,                   # Voxel size for downsamping
                           flg_plot = False)                     # Set to True to show intermidiate results
 
 # Select PCD filtering method
