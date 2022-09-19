@@ -1,4 +1,3 @@
-import open3d as o3d
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -7,6 +6,7 @@ import copy
 from camera_utils.camera_init import IntelRealsense
 from camera_utils.camera_init import Zed
 from ai_utils.YolactInference import YolactInference
+import open3d as o3d
 
 def display_inlier_outlier(cloud, ind):
     inlier_cloud = cloud.select_by_index(ind)

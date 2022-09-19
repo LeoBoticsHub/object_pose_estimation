@@ -1,4 +1,3 @@
-import open3d as o3d
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -9,6 +8,7 @@ from camera_utils.camera_init import IntelRealsense
 from camera_utils.camera_init import Zed
 from ai_utils.YolactInference import YolactInference
 from camera_calibration_lib.cameras_extrinsic_calibration import extrinsic_calibration
+import open3d as o3d
 
 try:
     yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_resnet50_drill_74_750.pth"
@@ -33,7 +33,7 @@ except:
     print("Loading failed. Cameras re-calibration")
     chess_size = (9, 6)
     chess_square_size = 25
-    cam1_H_camX = extrinsic_calibration([camera1, camera2], chess_size, chess_square_size, display_frame = False)
+    cam1_H_camX = extrinsic_calibration([camera1, camera2], chess_size, chess_square_size, loops = 1, display_frame = False)
     cam1_H_cam2 = cam1_H_camX[0]
     np.savetxt('test/cam1_H_cam2.csv', cam1_H_cam2, delimiter=',')
 
@@ -54,8 +54,8 @@ for camera in cameras:
     intrinsic = o3d.camera.PinholeCameraIntrinsic()
     intrinsic.set_intrinsics(width, height, camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
 
-    scene = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, intrinsic)
-    o3d.visualization.draw_geometries([scene])
+    # scene = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, intrinsic)
+    # o3d.visualization.draw_geometries([scene])
 
     print("Yolact inference")
     infer = yolact.img_inference(rgb_frame, classes=[obj_label])

@@ -1,8 +1,8 @@
 from pathlib import Path
 from object_pose_estimation.pose_estimator import PoseEstimator
-import open3d as o3d
 import numpy as np
 import copy
+import open3d as o3d
 
 # yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_resnet50_54_800000.pth"
 yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_resnet50_drill_74_750.pth"
