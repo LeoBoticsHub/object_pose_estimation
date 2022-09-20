@@ -10,6 +10,17 @@ from ai_utils.YolactInference import YolactInference
 from camera_calibration_lib.cameras_extrinsic_calibration import extrinsic_calibration
 import open3d as o3d
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 def display_inlier_outlier(cloud, ind):
     inlier_cloud = cloud.select_by_index(ind)
     outlier_cloud = cloud.select_by_index(ind, invert=True)
@@ -31,22 +42,22 @@ class PoseEstimator:
             elif type == 'ZED':
                 self.cameras.append(Zed(rgb_resolution=Zed.Resolution.HD, serial_number=serial))
             else:
-                sys.exit("Wrong camera type!")
+                sys.exit(f"{bcolors.FAIL}Wrong camera type!{bcolors.ENDC}")
             
         try:
             self.yolact = YolactInference(model_weights=yolact_weights, display_img = False)
         except:
-            raise ValueError('Yolact inizialization error')
+            raise ValueError(f"{bcolors.FAIL}Yolact inizialization error{bcolors.ENDC}")
 
         self.obj_label = obj_label      # object yolact label
         self.voxel_size = voxel_size    # downsampling voxel size
 
-        print("Load object model")
         try:
             self.model_pcd = o3d.io.read_point_cloud(obj_model_path)
             self.model_pcd = self.model_pcd.translate(-self.model_pcd.get_center())
+            print(f"{bcolors.OKGREEN}Object model LOADED{bcolors.ENDC}")
         except:
-            raise ValueError('Error loading object model')
+            raise ValueError(f"{bcolors.FAIL}Error loading object model{bcolors.ENDC}")
         
         self.model_pcd = self.model_pcd.voxel_down_sample(self.voxel_size) # 1. Points are bucketed into voxels.
                                                                            # 2. Each occupied voxel generates exact one point by averaging all points inside.
@@ -68,12 +79,14 @@ class PoseEstimator:
 
         if len(self.cameras) > 1:
             try:
-                print("Load external calibration configuration")
                 file = open(ext_cal_path,'rb')
                 self.cam1_H_camX = pkl.load(file) # hom. transformation from camera_1 to all other cameras
                 file.close()
+                print(f"{bcolors.OKGREEN}External calibration configuration LOADED{bcolors.ENDC}")
             except:
-                print("Loading failed. Cameras re-calibration")
+
+                print(f"{bcolors.WARNING}Loading ext. calib. data failed. Cameras re-calibration{bcolors.ENDC}")
+                input(f"{bcolors.WARNING}Place the calibration chessboard in the workspace{bcolors.ENDC}")
                 chess_size = (9, 6)
                 chess_square_size = 25
                 self.cam1_H_camX = extrinsic_calibration(self.cameras, chess_size, chess_square_size, loops = 100, display_frame = False)
@@ -96,7 +109,6 @@ class PoseEstimator:
     def get_yolact_pcd(self, filt_type, filt_params_dict):
         """ Get object PCD from RGBD frames masked by Yolact inference """
         print("Get frames")
-
         scene_pcds = []
         obj_pcds = []
         for k in range(len(self.cameras)):
@@ -146,9 +158,9 @@ class PoseEstimator:
                     obj_pcds.append(detected_pcd)
 
                 else:
-                    raise Exception("Yolact: Detected more than one object instance.")
+                    raise Exception(f"{bcolors.FAIL}Yolact: Detected more than one object instance{bcolors.ENDC}")
             else:
-                raise Exception("Yolact: no object detected.")
+                raise Exception(f"{bcolors.FAIL}Yolact: no object detected{bcolors.ENDC}")
 
         # merge PCDs
         whole_obj_pcd = obj_pcds[0]
@@ -172,7 +184,7 @@ class PoseEstimator:
                 display_inlier_outlier(whole_obj_pcd, ind)
         else:
             filt_pcd = copy.deepcopy(whole_obj_pcd)
-            print('Filtering method (filt_type) not valid -> No filter applied')
+            print(f"{bcolors.WARNING}Filtering method (filt_type) not valid -> No filter applied{bcolors.ENDC}")
 
         if self.flg_plot:
             o3d.visualization.draw_geometries([whole_scene_pcd, world_frame], window_name = 'Scene PCD')
