@@ -3,10 +3,23 @@ import matplotlib.pyplot as plt
 import os
 import sys
 import copy
+import pickle as pkl
 from camera_utils.camera_init import IntelRealsense
 from camera_utils.camera_init import Zed
 from ai_utils.YolactInference import YolactInference
+from camera_calibration_lib.cameras_extrinsic_calibration import extrinsic_calibration
 import open3d as o3d
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def display_inlier_outlier(cloud, ind):
     inlier_cloud = cloud.select_by_index(ind)
@@ -19,35 +32,70 @@ def display_inlier_outlier(cloud, ind):
 
 class PoseEstimator:
     """ Object Pose Estimator based on Yolact segmentation and ICP point-cloud registration """
-    def __init__(self, camera_type, obj_label, obj_model_path, yolact_weights, voxel_size, flg_plot = False):
-        try:
-            self.yolact = YolactInference(model_weights=yolact_weights, display_img = flg_plot)
-        except:
-            raise ValueError('Yolact inizialization error')
+    def __init__(self, cameras_dict, obj_label, obj_model_path, yolact_weights, voxel_size, ext_cal_path = 'config/cam1_H_camX.pkl', flg_plot = False):
 
-        if camera_type == 'REALSENSE':
-            self.camera = IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD)
-        elif camera_type == 'ZED':
-            self.camera = Zed(rgb_resolution=Zed.Resolution.HD)
-        else:
-            sys.exit("Wrong camera type!")
+        self.cameras = []
+        # cameras_dict: dictionary { "serial" : "type" } with type either "REALSENSE" or "ZED"
+        for serial, type in cameras_dict.items():
+            if type == 'REALSENSE':
+                self.cameras.append(IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number=serial))
+            elif type == 'ZED':
+                self.cameras.append(Zed(rgb_resolution=Zed.Resolution.HD, serial_number=serial))
+            else:
+                sys.exit(f"{bcolors.FAIL}Wrong camera type!{bcolors.ENDC}")
+            
+        try:
+            self.yolact = YolactInference(model_weights=yolact_weights, display_img = False)
+        except:
+            raise ValueError(f"{bcolors.FAIL}Yolact inizialization error{bcolors.ENDC}")
 
         self.obj_label = obj_label      # object yolact label
         self.voxel_size = voxel_size    # downsampling voxel size
 
-        print("Load object model")
         try:
             self.model_pcd = o3d.io.read_point_cloud(obj_model_path)
             self.model_pcd = self.model_pcd.translate(-self.model_pcd.get_center())
+            print(f"{bcolors.OKGREEN}Object model LOADED{bcolors.ENDC}")
         except:
-            raise ValueError('Error loading object model')
+            raise ValueError(f"{bcolors.FAIL}Error loading object model{bcolors.ENDC}")
         
         self.model_pcd = self.model_pcd.voxel_down_sample(self.voxel_size) # 1. Points are bucketed into voxels.
                                                                            # 2. Each occupied voxel generates exact one point by averaging all points inside.
        
+        print("Get camera intrinsic parameters")
+        self.intrinsic_params = []
+        for camera in self.cameras:
+            _, depth_frame = camera.get_aligned_frames()
+            width = max(depth_frame.shape[0], depth_frame.shape[1])
+            height = min(depth_frame.shape[0], depth_frame.shape[1])
+            intrinsic = o3d.camera.PinholeCameraIntrinsic()
+            intrinsic.set_intrinsics(width, height, camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
+            self.intrinsic_params.append(intrinsic)
+        
         print("Camera initialization")
         for i in range(30):
-            _, _ = self.camera.get_aligned_frames()
+            for camera in self.cameras:
+                _, _ = camera.get_aligned_frames()
+
+        if len(self.cameras) > 1:
+            try:
+                file = open(ext_cal_path,'rb')
+                self.cam1_H_camX = pkl.load(file) # hom. transformation from camera_1 to all other cameras
+                file.close()
+                print(f"{bcolors.OKGREEN}External calibration configuration LOADED{bcolors.ENDC}")
+            except:
+
+                print(f"{bcolors.WARNING}Loading ext. calib. data failed. Cameras re-calibration{bcolors.ENDC}")
+                input(f"{bcolors.WARNING}Place the calibration chessboard in the workspace{bcolors.ENDC}")
+                chess_size = (9, 6)
+                chess_square_size = 25
+                self.cam1_H_camX = extrinsic_calibration(self.cameras, chess_size, chess_square_size, loops = 100, display_frame = False)
+                
+                filehandler = open("config/cam1_H_camX.pkl","wb")
+                pkl.dump(self.cam1_H_camX,filehandler)
+                filehandler.close()
+        else:
+            self.cam1_H_camX = [] # only one camera
 
 
         self.flg_plot = flg_plot
@@ -59,91 +107,92 @@ class PoseEstimator:
 
 
     def get_yolact_pcd(self, filt_type, filt_params_dict):
-        """ Get object PCD from camera RGBD frames masked by Yolact inference """
-        print("Get camera frames")
-        rgb_frame, depth_frame = self.camera.get_aligned_frames()
-        rgb_frame = np.array(rgb_frame)
-        rgbd_frame = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(rgb_frame), o3d.geometry.Image(depth_frame.astype(np.uint16)))
-        
-
-        # set intrinsics for open3d
-        width = max(depth_frame.shape[0], depth_frame.shape[1])
-        height = min(depth_frame.shape[0], depth_frame.shape[1])
-        intrinsic = o3d.camera.PinholeCameraIntrinsic()
-        intrinsic.set_intrinsics(width, height, self.camera.intr['fx'], self.camera.intr['fy'], self.camera.intr['px'], self.camera.intr['py'])
-
-        # save scene pcd
-        scene_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, intrinsic)
+        """ Get object PCD from RGBD frames masked by Yolact inference """
+        print("Get frames")
+        scene_pcds = []
+        obj_pcds = []
+        for k in range(len(self.cameras)):
+            rgb_frame, depth_frame = self.cameras[k].get_aligned_frames()
+            rgb_frame = np.array(rgb_frame)
+            rgbd_frame = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(rgb_frame), o3d.geometry.Image(depth_frame.astype(np.uint16)))
             
-        print("Yolact inference")
-        infer = self.yolact.img_inference(rgb_frame, classes=[self.obj_label])
+            # save scene pcd
+            if k == 0: # 1st camera
+                scene_pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, self.intrinsic_params[k]))
+            else: # other cameras
+                scene_pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, self.intrinsic_params[k], extrinsic = np.linalg.inv(self.cam1_H_camX[k-1])))
+        
+            print("Yolact inference")
+            infer = self.yolact.img_inference(rgb_frame, classes=[self.obj_label])
 
-        if len(infer) != 0:
-            boxes = infer[self.obj_label]['boxes']
-            masks = infer[self.obj_label]['masks']
-            if len(boxes) == 1:
-                
-                rgb_frame_new = rgb_frame.copy()
-                depth_frame_new = depth_frame.copy()
-                depth_frame_new = np.array(depth_frame_new * masks[0], dtype = np.uint16)
-                
-                for i in range(3):
-                    rgb_frame_new[:,:,i] = rgb_frame_new[:,:,i] * masks[0]
-                
-                color_crop = o3d.geometry.Image(rgb_frame_new)
-                depth_crop = o3d.geometry.Image(depth_frame_new.astype(np.uint16))
-                rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop)
-                
-                # if self.flg_plot:
-                #     plt.figure()
-                #     plt.subplot(2, 2, 1)
-                #     plt.title('Grayscale scene')
-                #     plt.imshow(rgbd_frame.color)
-                #     plt.subplot(2, 2, 2)
-                #     plt.title('Depth scene')
-                #     plt.imshow(rgbd_frame.depth)
-                #     plt.subplot(2, 2, 3)
-                #     plt.title('Grayscale crop')
-                #     plt.imshow(rgbd_crop.color)
-                #     plt.subplot(2, 2, 4)
-                #     plt.title('Depth crop')
-                #     plt.imshow(rgbd_crop.depth)
-                #     plt.show()
+            if self.flg_plot:
+                world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
 
-                print("Use Yolact mask to crop point cloud")
-                detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, intrinsic)
-                # # Flip it, otherwise the pointcloud will be upside down
-                # detected_pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
-                detected_pcd = detected_pcd.voxel_down_sample(self.voxel_size)
+            if len(infer) != 0:
+                boxes = infer[self.obj_label]['boxes']
+                masks = infer[self.obj_label]['masks']
+                if len(boxes) == 1:
+                    
+                    rgb_frame_new = rgb_frame.copy()
+                    depth_frame_new = depth_frame.copy()
+                    depth_frame_new = np.array(depth_frame_new * masks[0], dtype = np.uint16)
+                    
+                    for i in range(3):
+                        rgb_frame_new[:,:,i] = rgb_frame_new[:,:,i] * masks[0]
+                    
+                    color_crop = o3d.geometry.Image(rgb_frame_new)
+                    depth_crop = o3d.geometry.Image(depth_frame_new.astype(np.uint16))
+                    rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop)
 
-                if self.flg_plot:
-                    world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
-                    o3d.visualization.draw_geometries([detected_pcd, world_frame], window_name = 'Yolact PCD')
+                    print("Use Yolact mask to crop point cloud")
 
-                
-
-                if filt_type == 'STATISTICAL':
-                    print("Statistical oulier removal")
-                    filt_pcd, ind = detected_pcd.remove_statistical_outlier(**filt_params_dict)
+                    if k == 0: # 1st camera
+                        detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, self.intrinsic_params[k])
+                    else: # other cameras
+                        detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, self.intrinsic_params[k], extrinsic = np.linalg.inv(self.cam1_H_camX[k-1]))
+                    
                     if self.flg_plot:
-                        display_inlier_outlier(detected_pcd, ind)
-                elif filt_type == 'RADIUS':
-                    print("Radius oulier removal")
-                    filt_pcd, ind = detected_pcd.remove_radius_outlier(**filt_params_dict)
-                    if self.flg_plot:
-                        display_inlier_outlier(detected_pcd, ind)
+                        o3d.visualization.draw_geometries([detected_pcd, world_frame], window_name = 'Yolact PCD - Camera '+str(k))
+                    
+                    # save detected pcd
+                    obj_pcds.append(detected_pcd)
+
                 else:
-                    filt_pcd = copy.deepcopy(detected_pcd)
-                    print('Filtering method (filt_type) not valid -> No filter applied')
-
-                if self.flg_plot:
-                    o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Filtered PCD')
-                
-                return filt_pcd, scene_pcd
+                    raise Exception(f"{bcolors.FAIL}Yolact: Detected more than one object instance{bcolors.ENDC}")
             else:
-                raise Exception("Yolact: Detected more than one object instance.")
+                raise Exception(f"{bcolors.FAIL}Yolact: no object detected{bcolors.ENDC}")
+
+        # merge PCDs
+        whole_obj_pcd = obj_pcds[0]
+        whole_scene_pcd = scene_pcds[0]
+        for k in range(1,len(obj_pcds)):
+            whole_obj_pcd = whole_obj_pcd + obj_pcds[k]
+            whole_scene_pcd = whole_scene_pcd + scene_pcds[k]
+
+        whole_obj_pcd = whole_obj_pcd.voxel_down_sample(self.voxel_size)
+        whole_scene_pcd = whole_scene_pcd.voxel_down_sample(self.voxel_size)
+
+        if filt_type == 'STATISTICAL':
+            print("Statistical oulier removal")
+            filt_pcd, ind = whole_obj_pcd.remove_statistical_outlier(**filt_params_dict)
+            if self.flg_plot:
+                display_inlier_outlier(whole_obj_pcd, ind)
+        elif filt_type == 'RADIUS':
+            print("Radius oulier removal")
+            filt_pcd, ind = whole_obj_pcd.remove_radius_outlier(**filt_params_dict)
+            if self.flg_plot:
+                display_inlier_outlier(whole_obj_pcd, ind)
         else:
-            raise Exception("Yolact: no object detected.")
+            filt_pcd = copy.deepcopy(whole_obj_pcd)
+            print(f"{bcolors.WARNING}Filtering method (filt_type) not valid -> No filter applied{bcolors.ENDC}")
+
+        if self.flg_plot:
+            o3d.visualization.draw_geometries([whole_scene_pcd, world_frame], window_name = 'Scene PCD')
+            o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Object PCD')
+
+        return whole_obj_pcd, whole_scene_pcd
+
+        
 
 
     def global_registration(self, obs_pcd):
