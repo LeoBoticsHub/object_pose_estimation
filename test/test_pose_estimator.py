@@ -17,7 +17,11 @@ yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_res
 model_path = str(Path.home()) + "/Code/Vision/object_pose_estimation/test/models/drill.ply"
 
 # cameras_dict = {'': 'REALSENSE'} # for a single camera
-cameras_dict = {'023322061667': 'REALSENSE', '023322062736': 'REALSENSE'} # for more cameras
+# IntelRealsense SERIAL NUMBER:
+# 023322061667 : D415
+# 023322062736 : D415
+# 049122251418 : D455
+cameras_dict = {'023322062736': 'REALSENSE', '023322062736': 'REALSENSE'} 
 
 estimator = PoseEstimator(cameras_dict = cameras_dict,          # Cameras employed {'serial_number': ('REALSENSE' or 'ZED')}
                           obj_label = 'drill',                  # Yolact label to find
