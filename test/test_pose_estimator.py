@@ -13,6 +13,7 @@ yolact_weights = str(Path.home()) + "/Code/Vision/yolact/weights/yolact_plus_res
 
 # Select PCD model
 # model_path = str(Path.home()) + "/Code/Vision/object_pose_estimation/test/models/mouse.ply"
+# model_path = str(Path.home()) + "/Code/Vision/object_pose_estimation/test/models/cup.ply"
 model_path = str(Path.home()) + "/Code/Vision/object_pose_estimation/test/models/drill.ply"
 
 # cameras_dict = {'': 'REALSENSE'} # for a single camera
