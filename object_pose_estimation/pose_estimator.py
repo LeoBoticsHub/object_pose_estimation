@@ -65,11 +65,8 @@ class PoseEstimator:
         print("Get camera intrinsic parameters")
         self.intrinsic_params = []
         for camera in self.cameras:
-            _, depth_frame = camera.get_aligned_frames()
-            width = max(depth_frame.shape[0], depth_frame.shape[1])
-            height = min(depth_frame.shape[0], depth_frame.shape[1])
             intrinsic = o3d.camera.PinholeCameraIntrinsic()
-            intrinsic.set_intrinsics(width, height, camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
+            intrinsic.set_intrinsics(camera.intr['width'], camera.intr['height'], camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
             self.intrinsic_params.append(intrinsic)
         
         print("Camera initialization")
@@ -190,7 +187,7 @@ class PoseEstimator:
             o3d.visualization.draw_geometries([whole_scene_pcd, world_frame], window_name = 'Scene PCD')
             o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Object PCD')
 
-        return whole_obj_pcd, whole_scene_pcd
+        return filt_pcd, whole_scene_pcd
 
         
 
