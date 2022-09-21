@@ -4,8 +4,8 @@ import os
 import sys
 import copy
 import pickle as pkl
-from camera_utils.camera_init import IntelRealsense
-from camera_utils.camera_init import Zed
+from camera_utils.cameras.IntelRealsense import IntelRealsense
+from camera_utils.cameras.Zed import Zed
 from ai_utils.YolactInference import YolactInference
 from camera_calibration_lib.cameras_extrinsic_calibration import extrinsic_calibration
 import open3d as o3d
