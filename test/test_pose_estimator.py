@@ -31,6 +31,7 @@ estimator = PoseEstimator(cameras_dict = cameras_dict,          # Cameras employ
                           chess_size = (5, 4),                  # Number of chessboard corners
                           chess_square_size = 40,               # Chessboard size lenght [mm]
                           calib_loops = 200,                    # Number of samples for average calibration
+                          flg_cal_wait_key = False,             # Set the wait-key calibration mode
                           flg_plot = False)                     # Set to True to show intermidiate results
 
 # Select PCD filtering method
