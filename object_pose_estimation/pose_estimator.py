@@ -33,7 +33,8 @@ def display_inlier_outlier(cloud, ind):
 class PoseEstimator:
     """ Object Pose Estimator based on Yolact segmentation and ICP point-cloud registration """
     def __init__(self, cameras_dict, obj_label, obj_model_path, yolact_weights, voxel_size,
-                 ext_cal_path = 'config/cam1_H_camX.pkl', chess_size = (5, 4), chess_square_size = 40, calib_loops = 100, flg_plot = False):
+                 ext_cal_path = 'config/cam1_H_camX.pkl', chess_size = (5, 4), chess_square_size = 40,
+                 calib_loops = 100, flg_cal_wait_key = False, flg_plot = False):
 
         self.cameras = []
         # cameras_dict: dictionary { "serial" : "type" } with type either "REALSENSE" or "ZED"
@@ -85,7 +86,8 @@ class PoseEstimator:
 
                 print(f"{bcolors.WARNING}Loading ext. calib. data failed. Cameras re-calibration{bcolors.ENDC}")
                 input(f"{bcolors.WARNING}Place the calibration chessboard in the workspace (press ENTER to continue){bcolors.ENDC}")
-                self.cam1_H_camX = extrinsic_calibration(self.cameras, chess_size, chess_square_size, loops = calib_loops, display_frame = flg_plot)
+                self.cam1_H_camX = extrinsic_calibration(self.cameras, chess_size, chess_square_size, loops = calib_loops,
+                                                         wait_key = flg_cal_wait_key, display_frame = flg_plot)
                 
                 filehandler = open(ext_cal_path,"wb")
                 pkl.dump(self.cam1_H_camX,filehandler)
