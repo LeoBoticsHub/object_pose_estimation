@@ -21,16 +21,21 @@ model_path = str(Path.home()) + "/Code/Vision/object_pose_estimation/test/models
 # 023322061667 : D415
 # 023322062736 : D415
 # 049122251418 : D455
-cameras_dict = {'023322062736': 'REALSENSE', '023322062736': 'REALSENSE'} 
+cameras_dict = {'049122251418': 'REALSENSE', '023322062736': 'REALSENSE'} 
 
 estimator = PoseEstimator(cameras_dict = cameras_dict,          # Cameras employed {'serial_number': ('REALSENSE' or 'ZED')}
                           obj_label = 'drill',                  # Yolact label to find
                           obj_model_path = model_path,          # Path to the PCD model
                           yolact_weights = yolact_weights,      # Path to Yolact weights
                           voxel_size = 0.005,                   # Voxel size for downsamping
+                          chess_size = (5, 4),                  # Number of chessboard corners
+                          chess_square_size = 40,               # Chessboard size lenght [mm]
+                          calib_loops = 200,                    # Number of samples for average calibration
                           flg_plot = False)                     # Set to True to show intermidiate results
 
 # Select PCD filtering method
+# filt_type = None
+# filt_params_dict = None
 filt_type = 'STATISTICAL'
 filt_params_dict = {'nb_neighbors': 50, 'std_ratio': 0.2}
 # filt_type = 'RADIUS'
