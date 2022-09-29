@@ -216,7 +216,9 @@ class PoseEstimator:
             source, target, model_fpfh, obs_fpfh, True, distance_threshold,
             o3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3, 
             [
-            o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+            # Check if two point clouds build the polygons with similar edge lengths
+            o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.1), # 0 (loose) and 1 (strict)
+            # Check if aligned point clouds are closes
             o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)
             ], 
             o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 1.0))
