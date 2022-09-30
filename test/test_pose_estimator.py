@@ -53,7 +53,7 @@ model_glob.paint_uniform_color([1, 0.706, 0])
 
 world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
 model_glob_frame = copy.deepcopy(world_frame).transform(T_gl)
-o3d.visualization.draw_geometries([model_glob, obj_pcd, world_frame, model_glob_frame, scene_pcd], window_name = 'Global registration')
+# o3d.visualization.draw_geometries([model_glob, obj_pcd, world_frame, model_glob_frame, scene_pcd], window_name = 'Global registration')
 
 # Apply Local Registration via ICP
 T_icp = estimator.local_registration(obj_pcd, T_gl, max_iteration = 100000, threshold = 0.2, method = 'p2p')
@@ -61,6 +61,13 @@ T_icp = estimator.local_registration(obj_pcd, T_gl, max_iteration = 100000, thre
 model_icp = copy.deepcopy(estimator.model_pcd).transform(T_icp)
 model_icp.paint_uniform_color([1, 0.706, 0])
 model_icp_frame = copy.deepcopy(world_frame).transform(T_icp)
-o3d.visualization.draw_geometries([model_icp, obj_pcd, world_frame, model_icp_frame, scene_pcd], window_name = 'ICP local registration')
+
+model_icp_plot = copy.deepcopy(model_icp).transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+obj_pcd_plot = copy.deepcopy(obj_pcd).transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+world_frame_plot = copy.deepcopy(world_frame).transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+model_icp_frame_plot = copy.deepcopy(model_icp_frame).transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+scene_pcd_plot = copy.deepcopy(scene_pcd).transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+
+o3d.visualization.draw_geometries([model_icp_plot, obj_pcd_plot, world_frame_plot, model_icp_frame_plot, scene_pcd_plot], window_name = 'ICP local registration')
 
 # To flip PCDs: pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
