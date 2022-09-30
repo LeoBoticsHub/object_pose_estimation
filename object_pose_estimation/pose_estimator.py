@@ -100,21 +100,22 @@ class PoseEstimator:
 
         self.flg_plot = flg_plot
 
-        if self.flg_plot:
-            world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
-            o3d.visualization.draw_geometries([self.model_pcd, world_frame], window_name = 'Model PCD')
+        # if self.flg_plot:
+        #     world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
+        #     o3d.visualization.draw_geometries([self.model_pcd, world_frame], window_name = 'Model PCD')
    
 
 
-    def get_yolact_pcd(self, filt_type, filt_params_dict):
+    def get_yolact_pcd(self, filt_type, filt_params_dict, flg_volume_int = False):
         """ Get object PCD from RGBD frames masked by Yolact inference """
         print("Get frames")
         scene_pcds = []
         obj_pcds = []
+        if flg_volume_int:  obj_rgbds = []
         for k in range(len(self.cameras)):
             rgb_frame, depth_frame = self.cameras[k].get_aligned_frames()
             rgb_frame = np.array(rgb_frame)
-            rgbd_frame = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(rgb_frame), o3d.geometry.Image(depth_frame.astype(np.uint16)))
+            rgbd_frame = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(rgb_frame), o3d.geometry.Image(depth_frame.astype(np.uint16)), convert_rgb_to_intensity=False)
             
             # save scene pcd
             if k == 0: # 1st camera
@@ -132,7 +133,8 @@ class PoseEstimator:
                 boxes = infer[self.obj_label]['boxes']
                 masks = infer[self.obj_label]['masks']
                 if len(boxes) == 1:
-                    
+
+                    print("Use Yolact mask to crop point cloud")
                     rgb_frame_new = rgb_frame.copy()
                     depth_frame_new = depth_frame.copy()
                     depth_frame_new = np.array(depth_frame_new * masks[0], dtype = np.uint16)
@@ -142,9 +144,8 @@ class PoseEstimator:
                     
                     color_crop = o3d.geometry.Image(rgb_frame_new)
                     depth_crop = o3d.geometry.Image(depth_frame_new.astype(np.uint16))
-                    rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop)
-
-                    print("Use Yolact mask to crop point cloud")
+                    rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop, depth_trunc=1.5, convert_rgb_to_intensity=False)
+                    if flg_volume_int:  obj_rgbds.append(rgbd_crop)
 
                     if k == 0: # 1st camera
                         detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, self.intrinsic_params[k])
@@ -162,6 +163,18 @@ class PoseEstimator:
             else:
                 raise Exception(f"{bcolors.FAIL}Yolact: no object detected{bcolors.ENDC}")
 
+        if flg_volume_int:
+            # volume integration
+            obj_volume = o3d.pipelines.integration.ScalableTSDFVolume(voxel_length = self.voxel_size,
+                                                                      sdf_trunc   =  self.voxel_size*5, 
+                                                                      color_type  =  o3d.pipelines.integration.TSDFVolumeColorType.RGB8)
+            for k in range(len(obj_rgbds)):
+                if k == 0:
+                    obj_volume.integrate(obj_rgbds[k], self.intrinsic_params[k], np.eye(4))
+                else:
+                    obj_volume.integrate(obj_rgbds[k], self.intrinsic_params[k], np.linalg.inv(self.cam1_H_camX[k-1]))
+                obj_volume_pcd = obj_volume.extract_point_cloud()
+
         # merge PCDs
         whole_obj_pcd = obj_pcds[0]
         whole_scene_pcd = scene_pcds[0]
@@ -175,22 +188,30 @@ class PoseEstimator:
         if filt_type == 'STATISTICAL':
             print("Statistical oulier removal")
             filt_pcd, ind = whole_obj_pcd.remove_statistical_outlier(**filt_params_dict)
+            if flg_volume_int:  obj_volume_filt_pcd, obj_volume_ind = obj_volume_pcd.remove_statistical_outlier(**filt_params_dict)
             if self.flg_plot:
                 display_inlier_outlier(whole_obj_pcd, ind)
+                if flg_volume_int:  display_inlier_outlier(obj_volume_pcd, obj_volume_ind)
         elif filt_type == 'RADIUS':
             print("Radius oulier removal")
             filt_pcd, ind = whole_obj_pcd.remove_radius_outlier(**filt_params_dict)
+            if flg_volume_int:  obj_volume_filt_pcd, obj_volume_ind = obj_volume_pcd.remove_statistical_outlier(**filt_params_dict)
             if self.flg_plot:
                 display_inlier_outlier(whole_obj_pcd, ind)
+                if flg_volume_int:  display_inlier_outlier(obj_volume_pcd, obj_volume_ind)
         else:
             filt_pcd = copy.deepcopy(whole_obj_pcd)
             print(f"{bcolors.WARNING}Filtering method (filt_type) not valid -> No filter applied{bcolors.ENDC}")
 
         if self.flg_plot:
             o3d.visualization.draw_geometries([whole_scene_pcd, world_frame], window_name = 'Scene PCD')
-            o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Object PCD')
-
-        return filt_pcd, whole_scene_pcd
+            o3d.visualization.draw_geometries([filt_pcd, world_frame], window_name = 'Object PCD (Sum)')
+            if flg_volume_int:  o3d.visualization.draw_geometries([obj_volume_filt_pcd, world_frame], window_name = 'Object PCD (Volume integration)')
+        
+        if flg_volume_int:
+            return obj_volume_filt_pcd, whole_scene_pcd
+        else:
+            return filt_pcd, whole_scene_pcd
 
         
 

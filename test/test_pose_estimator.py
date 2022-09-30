@@ -43,7 +43,7 @@ filt_params_dict = {'nb_neighbors': 50, 'std_ratio': 0.2}
 # filt_params_dict = {'nb_points': 16, 'radius': 0.0025*2.5}
 
 # Get PCD from Yolact-masked RGBD
-obj_pcd, scene_pcd = estimator.get_yolact_pcd(filt_type, filt_params_dict)
+obj_pcd, scene_pcd = estimator.get_yolact_pcd(filt_type, filt_params_dict, flg_volume_int = True)
 obj_pcd.paint_uniform_color([0, 0.651, 0.929])
 T_gl = estimator.global_registration(obj_pcd)
 
