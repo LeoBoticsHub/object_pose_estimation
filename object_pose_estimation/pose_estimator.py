@@ -5,7 +5,7 @@ import sys
 import copy
 import pickle as pkl
 from camera_utils.cameras.IntelRealsense import IntelRealsense
-from camera_utils.cameras.Zed import Zed
+# from camera_utils.cameras.Zed import Zed
 from ai_utils.YolactInference import YolactInference
 from camera_calibration_lib.cameras_extrinsic_calibration import extrinsic_calibration
 import open3d as o3d
@@ -40,14 +40,14 @@ class PoseEstimator:
         # cameras_dict: dictionary { "serial" : "type" } with type either "REALSENSE" or "ZED"
         for serial, type in cameras_dict.items():
             if type == 'REALSENSE':
-                self.cameras.append(IntelRealsense(rgb_resolution=IntelRealsense.Resolution.HD, serial_number=serial))
+                self.cameras.append(IntelRealsense(rgb_resolution = IntelRealsense.Resolution.HD, serial_number = serial))
             elif type == 'ZED':
-                self.cameras.append(Zed(rgb_resolution=Zed.Resolution.HD, serial_number=serial))
+                self.cameras.append(Zed(rgb_resolution = Zed.Resolution.HD, serial_number = serial))
             else:
                 sys.exit(f"{bcolors.FAIL}Wrong camera type!{bcolors.ENDC}")
             
         try:
-            self.yolact = YolactInference(model_weights=yolact_weights, display_img = False)
+            self.yolact = YolactInference(model_weights = yolact_weights, classes_white_list = [obj_label], display_img = False)
         except:
             raise ValueError(f"{bcolors.FAIL}Yolact inizialization error{bcolors.ENDC}")
 
@@ -106,7 +106,7 @@ class PoseEstimator:
    
 
 
-    def get_yolact_pcd(self, filt_type, filt_params_dict, flg_volume_int = False):
+    def get_yolact_pcd(self, filt_type, filt_params_dict, flg_volume_int = True):
         """ Get object PCD from RGBD frames masked by Yolact inference """
         print("Get frames")
         scene_pcds = []
@@ -124,7 +124,7 @@ class PoseEstimator:
                 scene_pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, self.intrinsic_params[k], extrinsic = np.linalg.inv(self.cam1_H_camX[k-1])))
         
             print("Yolact inference")
-            infer = self.yolact.img_inference(rgb_frame, classes=[self.obj_label])
+            infer = self.yolact.img_inference(rgb_frame)
 
             if self.flg_plot:
                 world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
@@ -218,8 +218,16 @@ class PoseEstimator:
 
     def global_registration(self, obs_pcd):
         """ Get a rough alignment between the observed PCD and the model """
-        source = self.model_pcd
-        target = obs_pcd
+        
+        # TODO: improve by considering info about a world frame        
+        # transl = obs_pcd.get_center()
+        # R_flip = np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
+        # T_gl = np.eye(4)
+        # T_gl[0:3,3] = transl
+        # return np.matmul(T_gl,R_flip)
+
+        source = copy.deepcopy(self.model_pcd)
+        target = copy.deepcopy(obs_pcd)
 
         radius_normal = self.voxel_size * 2
         print(":: Estimate normal with search radius %.3f." % radius_normal)
@@ -231,7 +239,7 @@ class PoseEstimator:
         model_fpfh = o3d.pipelines.registration.compute_fpfh_feature(source, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
         obs_fpfh = o3d.pipelines.registration.compute_fpfh_feature(target, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
 
-        distance_threshold = self.voxel_size * 1.5
+        distance_threshold = self.voxel_size * 10
         print(":: RANSAC registration with liberal distance threshold %.3f." % distance_threshold)
         glob_rec = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
             source, target, model_fpfh, obs_fpfh, True, distance_threshold,
@@ -244,14 +252,15 @@ class PoseEstimator:
             ], 
             o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 1.0))
         print(glob_rec)
+
         return glob_rec.transformation
 
     def local_registration(self, obs_pcd, trans_init, max_iteration = 100000, threshold = 0.01, method = 'p2p'):
         """ Refine the alignment between the observed PCD and the model via Point-to-Point ICP """
         print("Apply local registration via ICP")
 
-        source = self.model_pcd
-        target = obs_pcd
+        source = copy.deepcopy(self.model_pcd)
+        target = copy.deepcopy(obs_pcd)
 
         if method == 'p2p':
             print("Point-to-point ICP")
