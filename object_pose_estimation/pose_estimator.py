@@ -174,7 +174,8 @@ class PoseEstimator:
                 else:
                     obj_volume.integrate(obj_rgbds[k], self.intrinsic_params[k], np.linalg.inv(self.cam1_H_camX[k-1]))
                 obj_volume_pcd = obj_volume.extract_point_cloud()
-
+                
+        # TODO: do either merge or volume integration, not both!
         # merge PCDs
         whole_obj_pcd = obj_pcds[0]
         whole_scene_pcd = scene_pcds[0]
@@ -201,6 +202,7 @@ class PoseEstimator:
                 if flg_volume_int:  display_inlier_outlier(obj_volume_pcd, obj_volume_ind)
         else:
             filt_pcd = copy.deepcopy(whole_obj_pcd)
+            obj_volume_filt_pcd = copy.deepcopy(obj_volume_pcd)
             print(f"{bcolors.WARNING}Filtering method (filt_type) not valid -> No filter applied{bcolors.ENDC}")
 
         if self.flg_plot:
