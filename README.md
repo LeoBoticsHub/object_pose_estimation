@@ -13,7 +13,7 @@ Additionally, it is necessary to install our [camera_utils](https://github.com/I
 
 ### Installation
 ___
-To install the camera_calibration package on your system, clone the Gitbub repository in a folder of your choice, open the cloned repository path in a terminal and run the following command
+To install the camera_calibration package on your system, clone the GitHub repository in a folder of your choice, open the cloned repository path in a terminal and run the following command
 
 ```
 python3 -m pip install .
