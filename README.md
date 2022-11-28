@@ -38,6 +38,10 @@ A __PoseEstimator__ object provides different functions to capture object point 
 
 Some example scripts can be found inside the __example__ folder.
 
+## License
+___
+Distributed under the ```GPLv3``` License. See [LICENSE](LICENSE) for more information.
+
 ## Authors
 ___
 The package is provided by:
