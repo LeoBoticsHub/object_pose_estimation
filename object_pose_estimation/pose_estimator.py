@@ -196,7 +196,7 @@ class PoseEstimator:
         elif filt_type == 'RADIUS':
             print("Radius oulier removal")
             filt_pcd, ind = whole_obj_pcd.remove_radius_outlier(**filt_params_dict)
-            if flg_volume_int:  obj_volume_filt_pcd, obj_volume_ind = obj_volume_pcd.remove_statistical_outlier(**filt_params_dict)
+            if flg_volume_int:  obj_volume_filt_pcd, obj_volume_ind = obj_volume_pcd.remove_radius_outlier(**filt_params_dict)
             if self.flg_plot:
                 display_inlier_outlier(whole_obj_pcd, ind)
                 if flg_volume_int:  display_inlier_outlier(obj_volume_pcd, obj_volume_ind)
