@@ -1,10 +1,10 @@
 # object_pose_estimation
 
 Library to perform 6D object pose estimation: Yolact masking + ICP Point Cloud Registration
-___
+
 
 ### Dependencies
-___
+
 The library contains python modules which are dependent on the following 3rd-party libraries:
 ```
 setuptools, numpy, open3d, opencv-python, matplotlib
@@ -12,7 +12,7 @@ setuptools, numpy, open3d, opencv-python, matplotlib
 Additionally, it is necessary to install our [camera_utils](https://github.com/IASRobolab/camera_utils), [ai_utils](https://github.com/IASRobolab/ai_utils), and [camera_calibration](https://github.com/IASRobolab/camera_calibration)
 
 ### Installation
-___
+
 To install the object_pose_estimation package on your system, clone the GitHub repository in a folder of your choice, open the cloned repository path in a terminal and run the following command
 
 ```
@@ -27,7 +27,6 @@ python3 -m pip install -e .
 ```
 
 ## Usage
-___
 
 A __PoseEstimator__ object provides different functions to capture object point clouds from RGBD cameras and retrieve object 6D pose using ICP registration techniques (given a model of the desired object).
 
@@ -39,11 +38,11 @@ A __PoseEstimator__ object provides different functions to capture object point 
 Some example scripts can be found inside the __example__ folder.
 
 ## License
-___
+
 Distributed under the ```GPLv3``` License. See [LICENSE](LICENSE) for more information.
 
 ## Authors
-___
+
 The package is provided by:
 
 - [Fabio Amadio](https://github.com/fabio-amadio) [Mantainer]
