@@ -37,7 +37,7 @@ A __PoseEstimator__ object provides different functions to capture object point 
 
 Some example scripts can be found inside the __example__ folder.
 
-A __PCD_Obj_Combined__ object provides different functions to capture object point clouds from RGBD cameras and retrieve the pcd combined of the masked object and the centroid of the fitted plane of the upper surface of the objects (in general boxes).
+A __PCD_Obj_Combined__ provides different functions to capture object point clouds from RGBD cameras, retrieve the pcd combined of the masked object and the centroid of the fitted plane of the upper surface of the objects (in general boxes).
 
 - __get_yolact_pcd__ use Yolact algorithm to isolate the desired object point cloud from images taken by multiple cameras.
 - __compute_centroid__ gets the 3D position of the centroid of the desired object.
