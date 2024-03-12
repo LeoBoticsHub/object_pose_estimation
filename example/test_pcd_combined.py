@@ -22,7 +22,7 @@ yolo_weights="/home/azunino/Downloads/Data_Robotic_Arms/runs/segment/train4/weig
 # 242422303242 : D455 new
 # 243122302060 : D455 new
      
-cameras_dict = {'243122302060': 'REALSENSE', '049122251418': 'REALSENSE'} 
+cameras_dict = {'243122302060': 'REALSENSE', '242422303242': 'REALSENSE'} 
 #cameras_dict = {'243122302060': 'REALSENSE'} 
 
 estimator = PCD_Obj_Combined_YOLO(cameras_dict = cameras_dict,          # Cameras employed {'serial_number': ('REALSENSE' or 'ZED')}

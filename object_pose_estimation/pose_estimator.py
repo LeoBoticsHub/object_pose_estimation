@@ -6,13 +6,13 @@ import copy
 import pickle as pkl
 from camera_utils.cameras.IntelRealsense import IntelRealsense
 # from camera_utils.cameras.Zed import Zed
-from ai_utils.detectors.YolactInference import YolactInference
+#from ai_utils.detectors.YolactInference import YolactInference
 from ai_utils.detectors.Yolov8Inference import Yolov8Inference
 from camera_calibration_lib.cameras_extrinsic_calibration import extrinsic_calibration
 import open3d as o3d
 import cv2
-
-
+import pdb
+import time
 def farthest_point_sample(point, npoint):
     """
     Input:
@@ -379,7 +379,7 @@ class PCD_Obj_Combined:
         # cameras_dict: dictionary { "serial" : "type" } with type either "REALSENSE" or "ZED"
         for serial, type in cameras_dict.items():
             if type == 'REALSENSE':
-                self.cameras.append(IntelRealsense(camera_resolution = IntelRealsense.Resolution.HD, serial_number = serial))
+                self.cameras.append(IntelRealsense(rgb_resolution = IntelRealsense.Resolution.HD, serial_number = serial))
             elif type == 'ZED':
                 self.cameras.append(Zed(rgb_resolution = Zed.Resolution.HD, serial_number = serial))
             else:
@@ -461,6 +461,7 @@ class PCD_Obj_Combined:
             if len(infer) != 0:
                 boxes = infer[self.obj_label]['boxes']
                 masks = infer[self.obj_label]['masks']
+
                 if len(boxes) == 1:
 
                     
@@ -555,7 +556,7 @@ class PCD_Obj_Combined:
         
         whole_obj_pcd = whole_obj_pcd.voxel_down_sample(self.voxel_size)
         whole_scene_pcd = whole_scene_pcd.voxel_down_sample(self.voxel_size)
-
+         
         if filt_type == 'STATISTICAL':
             print("Statistical oulier removal")
             filt_pcd, ind = whole_obj_pcd.remove_statistical_outlier(**filt_params_dict)
@@ -649,14 +650,14 @@ class  PCD_Obj_Combined_YOLO:
         # cameras_dict: dictionary { "serial" : "type" } with type either "REALSENSE" or "ZED"
         for serial, type in cameras_dict.items():
             if type == 'REALSENSE':
-                self.cameras.append(IntelRealsense(camera_resolution = IntelRealsense.Resolution.HD, serial_number = serial))
+                self.cameras.append(IntelRealsense(rgb_resolution = IntelRealsense.Resolution.HD, serial_number = serial))
             elif type == 'ZED':
                 self.cameras.append(Zed(rgb_resolution = Zed.Resolution.HD, serial_number = serial))
             else:
                 sys.exit(f"{bcolors.FAIL}Wrong camera type!{bcolors.ENDC}")
             
         try:
-            self.yolo = Yolov8Inference(model_weights = yolo_weights, score_threshold=0.5, classes_white_list = [obj_label], display_img = True)
+            self.yolo = Yolov8Inference(model_weights = yolo_weights, score_threshold=0.1, classes_white_list = [obj_label], display_img = True)
         except:
             raise ValueError(f"{bcolors.FAIL}Yolact inizialization error{bcolors.ENDC}")
 
@@ -731,6 +732,7 @@ class  PCD_Obj_Combined_YOLO:
             if len(infer) != 0:
                 boxes = infer[self.obj_label]['boxes']
                 masks = infer[self.obj_label]['masks']
+                
                 if len(boxes) == 1:
 
                     
@@ -823,9 +825,9 @@ class  PCD_Obj_Combined_YOLO:
 
         ###########
         
-        whole_obj_pcd = whole_obj_pcd.voxel_down_sample(self.voxel_size)
-        whole_scene_pcd = whole_scene_pcd.voxel_down_sample(self.voxel_size)
-
+        #whole_obj_pcd = whole_obj_pcd.voxel_down_sample(self.voxel_size)
+        #whole_scene_pcd = whole_scene_pcd.voxel_down_sample(self.voxel_size)
+        obj_volume_pcd = whole_obj_pcd
         if filt_type == 'STATISTICAL':
             print("Statistical oulier removal")
             filt_pcd, ind = whole_obj_pcd.remove_statistical_outlier(**filt_params_dict)
@@ -907,7 +909,278 @@ class  PCD_Obj_Combined_YOLO:
             o3d.visualization.draw_geometries([pcd, inlier_cloud,  centroid])        
 
 
-    
+class  PCD_multiple_obj_YOLO:
+    """ Object Pose Estimator based on Yolact segmentation and ICP point-cloud registration """
+    def __init__(self, cameras_dict, obj_label, yolo_weights, voxel_size,
+                 ext_cal_path = 'config/cam1_H_camX.pkl', chess_size = (5, 4), chess_square_size = 40,
+                 calib_loops = 100, flg_cal_wait_key = False, flg_plot = False):
 
+        self.cameras = []
+        # cameras_dict: dictionary { "serial" : "type" } with type either "REALSENSE" or "ZED"
+        for serial, type in cameras_dict.items():
+            if type == 'REALSENSE':
+                self.cameras.append(IntelRealsense(rgb_resolution = IntelRealsense.Resolution.HD, serial_number = serial))
+            elif type == 'ZED':
+                self.cameras.append(Zed(rgb_resolution = Zed.Resolution.HD, serial_number = serial))
+            else:
+                sys.exit(f"{bcolors.FAIL}Wrong camera type!{bcolors.ENDC}")
+            
+        try:
+            self.yolo = Yolov8Inference(model_weights = yolo_weights, score_threshold=0.85, classes_white_list = [obj_label], display_img = True, return_img=True)
+        except:
+            raise ValueError(f"{bcolors.FAIL}Yolact inizialization error{bcolors.ENDC}")
+
+        self.obj_label = obj_label      # object yolact label
+        self.voxel_size = voxel_size    # downsampling voxel size
+        
+        print("Get camera intrinsic parameters")
+        self.intrinsic_params = []
+        for camera in self.cameras:
+            intrinsic = o3d.camera.PinholeCameraIntrinsic()
+            intrinsic.set_intrinsics(camera.intr['width'], camera.intr['height'], camera.intr['fx'], camera.intr['fy'], camera.intr['px'], camera.intr['py'])
+            self.intrinsic_params.append(intrinsic)
+        
+        print("Camera initialization")
+        for i in range(30):
+            for camera in self.cameras:
+                _, _ = camera.get_aligned_frames()
+
+        if len(self.cameras) > 1:
+            try:
+                file = open(ext_cal_path,'rb')
+                self.cam1_H_camX = pkl.load(file) # hom. transformation from camera_1 to all other cameras
+                file.close()
+                print(f"{bcolors.OKGREEN}External calibration configuration LOADED{bcolors.ENDC}")
+            except:
+
+                print(f"{bcolors.WARNING}Loading ext. calib. data failed. Cameras re-calibration{bcolors.ENDC}")
+                input(f"{bcolors.WARNING}Place the calibration chessboard in the workspace (press ENTER to continue){bcolors.ENDC}")
+                self.cam1_H_camX = extrinsic_calibration(self.cameras, chess_size, chess_square_size, loops = calib_loops,
+                                                         wait_key = flg_cal_wait_key, display_frame = flg_plot)
                 
+                filehandler = open(ext_cal_path,"wb")
+                pkl.dump(self.cam1_H_camX,filehandler)
+                filehandler.close()
+                print(f"{bcolors.WARNING}Calibration completed. Exit program.{bcolors.ENDC}")
+                sys.exit(0)
+        else:
+            self.cam1_H_camX = [] # only one camera
 
+
+        self.flg_plot = flg_plot
+
+        # if self.flg_plot:
+        #     world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)
+        #     o3d.visualization.draw_geometries([self.model_pcd, world_frame], window_name = 'Model PCD')
+   
+    
+    
+    def get_yolo_pcd(self):
+        """ Get object PCD from RGBD frames masked by Yolo inference """
+        print("Get frames")
+        scene_pcds = []
+        
+        rgb_imgs = []
+        depth_imgs = []
+    
+        infer_two_cams = []
+        for k in range(len(self.cameras)):
+            for i in range(20): #discarding the first frames for having stable frames
+                _, _ = self.cameras[k].get_frames()
+            rgb_frame, depth_frame = self.cameras[k].get_aligned_frames()
+            rgb_frame = np.array(rgb_frame)
+            rgb_imgs.append(rgb_frame)
+            depth_imgs.append(depth_frame)
+            rgbd_frame = o3d.geometry.RGBDImage.create_from_color_and_depth(o3d.geometry.Image(rgb_frame), o3d.geometry.Image(depth_frame.astype(np.uint16)), convert_rgb_to_intensity=False)
+            
+            # save scene pcd
+            if k == 0: # 1st camera
+                scene_pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, self.intrinsic_params[k]))
+            else: # other cameras
+                scene_pcds.append(o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_frame, self.intrinsic_params[k], extrinsic = np.linalg.inv(self.cam1_H_camX[k-1])))
+        
+            print("Yolo inference")
+            infer_two_cams.append(self.yolo.img_inference(rgb_frame)[0])
+            
+            cv2.imwrite('img_yolo_cam' + str(k)+ '.png', self.yolo.img_inference(rgb_frame)[1])
+        if self.flg_plot:
+            world_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size = 0.1)  ####TO CHECK IF IT IS DIFFERENT PER CAMERA
+        
+        if len(infer_two_cams[0]) != 0 and len(infer_two_cams[1]) != 0 :         
+            if len(infer_two_cams[0][self.obj_label]['boxes'])==len(infer_two_cams[1][self.obj_label]['boxes']):
+                    obj_pcds_two_cameras = {} # dictionary containing for each camera (key k) all the filtered point cloud objects
+                    for k in range(len(self.cameras)):
+                        obj_pcds = []
+                        boxes = infer_two_cams[k][self.obj_label]['boxes']
+                        masks = infer_two_cams[k][self.obj_label]['masks']
+                        ############
+                        #order the bboxes sorted by closest to the upper-left corner in rgb pixel space
+                        """ bbox_array = np.array(boxes)
+                        dist_boxes = (bbox_array[:, 0]**2 + bbox_array[:, 1] **2)**0.5
+                        idx_boxes_sorted = np.argsort(dist_boxes) """
+                        ############
+                        
+                        for bb in range(len(boxes)) :
+
+                            print("Use Yolo mask to crop point cloud")
+                            rgb_frame_new = rgb_imgs[k].copy()
+                            depth_frame_new = depth_imgs[k].copy()
+
+                            mask = np.asarray(masks[bb], np.uint8) #TO CHANGE!!!!!!! index
+                        
+                            ##IF WE WANT A RECTANGULAR MASK
+                            #rect_mask = refine_mask(mask)
+                            ##
+                            # extract mask from rgb
+                            for i in range(3):
+                                rgb_frame_new[:, :, i] = np.multiply(rgb_frame_new[:, :, i], mask)
+                            # extract mask from depth
+                            depth_frame_new = np.multiply(depth_frame_new, mask, dtype = np.uint16)
+
+                            # create open3d point cloud of the box
+                            color_crop = o3d.geometry.Image(rgb_frame_new)
+                            depth_crop = o3d.geometry.Image(depth_frame_new.astype(np.uint16))
+                            rgbd_crop = o3d.geometry.RGBDImage.create_from_color_and_depth(color_crop, depth_crop, depth_trunc=2.3, convert_rgb_to_intensity=False)
+                            
+
+                            if k == 0: # 1st camera
+                                detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, self.intrinsic_params[k])
+                            else: # other cameras
+                                detected_pcd = o3d.geometry.PointCloud.create_from_rgbd_image(rgbd_crop, self.intrinsic_params[k], extrinsic = np.linalg.inv(self.cam1_H_camX[k-1]))
+                            
+                            if self.flg_plot:
+                                o3d.visualization.draw_geometries([detected_pcd, world_frame], window_name = 'Yolact PCD - Camera '+str(k))
+                            
+                            # save detected pcd
+                            obj_pcds.append(detected_pcd)
+                        obj_pcds_two_cameras[str(k)]=obj_pcds
+
+            else:
+                raise Exception(f"{bcolors.FAIL}Yolo: The two cameras have detected a different number of objects{bcolors.ENDC}")
+        else:
+            raise Exception(f"{bcolors.FAIL}Yolo: One camera has not detected object{bcolors.ENDC}")
+        
+        whole_scene_pcd = scene_pcds[0]   
+        for k in range(1,len(self.cameras)) :
+            whole_scene_pcd = whole_scene_pcd + scene_pcds[k] 
+
+        if self.flg_plot:
+            o3d.visualization.draw_geometries([whole_scene_pcd, world_frame], window_name = 'Scene PCD')
+        filt_obj_pcd = []
+        for idx_pcds_cam1 in range(len(obj_pcds_two_cameras['0'])) :
+            # merge PCDs
+            cam1_cl = obj_pcds_two_cameras['0'][idx_pcds_cam1]
+            
+            min_dist=99999
+            for idx_pcds_cam2 in range(len(obj_pcds_two_cameras['1'])) :
+                current_pcd_dist = np.mean(cam1_cl.compute_point_cloud_distance(obj_pcds_two_cameras['1'][idx_pcds_cam2]))
+                if  current_pcd_dist < min_dist :
+                    sel_idx_pcd_cam2 = idx_pcds_cam2
+                    min_dist = current_pcd_dist
+            cam2_cl = obj_pcds_two_cameras['1'][sel_idx_pcd_cam2]
+            ###SEGMENT PLANE
+            plane_model, inliers = cam1_cl.segment_plane(distance_threshold=0.03, ransac_n=3, num_iterations=1000)
+            inlier_cloud_c1 = cam1_cl.select_by_index(inliers)
+            #outlier_cloud = cam1_cl.select_by_index(inliers, invert=True)
+            #inlier_cloud_c1 = inlier_cloud_c1.voxel_down_sample(voxel_size=0.002)
+            #outlier_cloud = outlier_cloud.voxel_down_sample(voxel_size=0.002)
+
+            plane_model, inliers = cam2_cl.segment_plane(distance_threshold=0.03, ransac_n=3, num_iterations=1000)
+            inlier_cloud_c2 = cam2_cl.select_by_index(inliers)
+            #outlier_cloud = cam1_cl.select_by_index(inliers, invert=True)
+            #inlier_cloud_c2 = inlier_cloud_c2.voxel_down_sample(voxel_size=0.002)
+            #outlier_cloud = outlier_cloud.voxel_down_sample(voxel_size=0.002)
+            ######
+
+
+            if self.flg_plot:
+                o3d.visualization.draw_geometries([inlier_cloud_c1.paint_uniform_color([0, 1., 0])],
+                                            window_name = 'One camera')
+                o3d.visualization.draw_geometries([inlier_cloud_c2.paint_uniform_color([1., 0, 0])],
+                                            window_name = 'Two camera')
+
+                o3d.visualization.draw_geometries([inlier_cloud_c1.paint_uniform_color([0, 1., 0]),
+                                            inlier_cloud_c2.paint_uniform_color([1., 0, 0])],
+                                            window_name = 'One camera (green) - Two camera (red)')
+
+
+            ######ICP
+            cam2_cl_down = inlier_cloud_c2.voxel_down_sample(voxel_size=0.02)
+
+            source=cam2_cl_down
+            target=inlier_cloud_c1
+
+
+            voxel_size = 0.05
+            radius_normal = voxel_size * 2
+            print(":: Estimate normal with search radius %.3f." % radius_normal)
+            source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=10))
+            target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=10))
+
+            radius_feature = voxel_size * 5
+            print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
+            model_fpfh = o3d.pipelines.registration.compute_fpfh_feature(source, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+            obs_fpfh = o3d.pipelines.registration.compute_fpfh_feature(target, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+
+            distance_threshold = voxel_size * 1.5
+            print(":: RANSAC registration with liberal distance threshold %.3f." % distance_threshold)
+            glob_rec = o3d.pipelines.registration.registration_ransac_based_on_feature_matching(
+                source, target, model_fpfh, obs_fpfh, True, distance_threshold,
+                o3d.pipelines.registration.TransformationEstimationPointToPoint(False), 3, 
+                [
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnEdgeLength(0.9),
+                o3d.pipelines.registration.CorrespondenceCheckerBasedOnDistance(distance_threshold)
+                ], 
+                o3d.pipelines.registration.RANSACConvergenceCriteria(100000, 1.0))
+            print(glob_rec)
+
+
+            T_gl = glob_rec.transformation
+
+
+            # Apply Global Registration
+            source_gl = copy.deepcopy(inlier_cloud_c2).transform(T_gl)
+            source_gl.paint_uniform_color([1, 0.706, 0])
+
+            o3d.visualization.draw_geometries([source, source_gl, target], window_name = 'Global registration')
+
+            trans_init = T_gl
+            threshold = 2
+            print("Robust point-to-plane ICP")
+            sigma = 0.1
+            loss = o3d.pipelines.registration.TukeyLoss(k=sigma)
+            print("Using robust loss:", loss)
+            p2l = o3d.pipelines.registration.TransformationEstimationPointToPlane(loss)
+            conv = o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness = 10**-6, relative_rmse = 10**-6, max_iteration = 10000)
+            reg_p2l = o3d.pipelines.registration.registration_icp(source, target,
+                                                                threshold, trans_init,
+                                                                p2l, conv)
+            print(reg_p2l)
+            T_icp = reg_p2l.transformation
+
+            # Apply Local Registration
+            source_icp = copy.deepcopy(inlier_cloud_c2).transform(T_icp)
+            source_icp.paint_uniform_color([1, 0.706, 0])
+
+            o3d.visualization.draw_geometries([source, source_icp, target], window_name = 'Local registration Point-To-Plane ICP (robust kernel)')
+
+            o3d.visualization.draw_geometries([source_icp, target], window_name = 'Transformed')
+
+            print('DISTANCE ', str(np.mean(source_icp.compute_point_cloud_distance(target))))
+
+            ######
+            filt_obj_pcd.append(target + source_icp)
+        return(filt_obj_pcd)
+            
+        
+        #return filt_pcd, whole_scene_pcd
+    def compute_centroid(self, pcd, display=False):
+                  
+
+            # -------------- CENTROID -------------------
+            # box upper surface centroid
+            centroid = pcd.get_center()
+            centroid = o3d.geometry.PointCloud(o3d.utility.Vector3dVector([centroid]))
+            centroid.paint_uniform_color([1.0, 0, 0])
+            if display:
+                o3d.visualization.draw_geometries([pcd, centroid])        
